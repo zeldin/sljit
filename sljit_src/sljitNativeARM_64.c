@@ -258,30 +258,42 @@ static SLJIT_INLINE sljit_ins* detect_jump_type(struct sljit_jump *jump, sljit_i
 	}
 
 	if (diff <= 0x7ffffff && diff >= -0x8000000) {
-		if (jump->flags & IS_COND)
-			code_ptr[-1] = SWAP_INSTRUCTION(SWAP_INSTRUCTION(code_ptr[-1]) - (4 << 5));
+		if (jump->flags & IS_COND) {
+			/* imm19 is expected to be 6 here, change it to 2 */
+			SLJIT_ASSERT(((SWAP_INSTRUCTION(code_ptr[-1]) >> 5) & 0x7ffff) == 6);
+			code_ptr[-1] ^= SWAP_INSTRUCTION((2 ^ 6) << 5);
+		}
 		jump->flags |= PATCH_B;
 		return code_ptr;
 	}
 
 	if (target_addr < 0x100000000l) {
-		if (jump->flags & IS_COND)
-			code_ptr[-1] = SWAP_INSTRUCTION(SWAP_INSTRUCTION(code_ptr[-1]) - (2 << 5));
+		if (jump->flags & IS_COND) {
+			/* imm19 is expected to be 6 here, change it to 4 */
+			SLJIT_ASSERT(((SWAP_INSTRUCTION(code_ptr[-1]) >> 5) & 0x7ffff) == 6);
+			code_ptr[-1] ^= SWAP_INSTRUCTION((4 ^ 6) << 5);
+		}
 		code_ptr[2] = code_ptr[0];
 		return code_ptr + 2;
 	}
 
 	if (diff <= 0xfffff000l && diff >= -0x100000000l) {
-		if (jump->flags & IS_COND)
-			code_ptr[-1] = SWAP_INSTRUCTION(SWAP_INSTRUCTION(code_ptr[-1]) - (2 << 5));
+		if (jump->flags & IS_COND) {
+			/* imm19 is expected to be 6 here, change it to 4 */
+			SLJIT_ASSERT(((SWAP_INSTRUCTION(code_ptr[-1]) >> 5) & 0x7ffff) == 6);
+			code_ptr[-1] ^= SWAP_INSTRUCTION((4 ^ 6) << 5);
+		}
 		jump->flags |= PATCH_B32;
 		code_ptr[2] = code_ptr[0];
 		return code_ptr + 2;
 	}
 
 	if (target_addr < 0x1000000000000l) {
-		if (jump->flags & IS_COND)
-			code_ptr[-1] = SWAP_INSTRUCTION(SWAP_INSTRUCTION(code_ptr[-1]) - (1 << 5));
+		if (jump->flags & IS_COND) {
+			/* imm19 is expected to be 6 here, change it to 5 */
+			SLJIT_ASSERT(((SWAP_INSTRUCTION(code_ptr[-1]) >> 5) & 0x7ffff) == 6);
+			code_ptr[-1] ^= SWAP_INSTRUCTION((5 ^ 6) << 5);
+		}
 		jump->flags |= PATCH_ABS48;
 		code_ptr[3] = code_ptr[0];
 		return code_ptr + 3;
@@ -350,7 +362,7 @@ static SLJIT_INLINE void generate_jump_or_mov_addr(struct sljit_jump *jump, slji
 		if (jump->flags & PATCH_COND) {
 			addr = (addr - (sljit_sw)SLJIT_ADD_EXEC_OFFSET(buf_ptr, executable_offset)) >> 2;
 			SLJIT_ASSERT(addr <= 0x3ffff && addr >= -0x40000);
-			buf_ptr[0] = SWAP_INSTRUCTION((SWAP_INSTRUCTION(buf_ptr[0]) & ~(sljit_ins)0xffffe0) | (sljit_ins)((addr & 0x7ffff) << 5));
+			buf_ptr[0] = (buf_ptr[0] & ~(sljit_ins)SWAP_INSTRUCTION(0xffffe0)) | (sljit_ins)SWAP_INSTRUCTION((addr & 0x7ffff) << 5);
 			return;
 		}
 
@@ -3815,7 +3827,7 @@ SLJIT_API_FUNC_ATTRIBUTE void sljit_set_const(sljit_uw addr, sljit_s32 op, sljit
 		SLJIT_ASSERT((SWAP_INSTRUCTION(inst[0]) & 0xffe00000) == MOVZ || (SWAP_INSTRUCTION(inst[0]) & 0xffe00000) == MOVN);
 
 		SLJIT_UPDATE_WX_FLAGS(inst, inst + 1, 0);
-		inst[0] = SWAP_INSTRUCTION(SLJIT_EMIT_CONST_U8(new_constant) | (SWAP_INSTRUCTION(inst[0]) & 0x1f));
+		inst[0] = SWAP_INSTRUCTION(SLJIT_EMIT_CONST_U8(new_constant)) | (inst[0] & SWAP_INSTRUCTION(0x1f));
 		SLJIT_UPDATE_WX_FLAGS(inst, inst + 1, 1);
 		inst = (sljit_ins *)SLJIT_ADD_EXEC_OFFSET(inst, executable_offset);
 		SLJIT_CACHE_FLUSH(inst, inst + 1);
@@ -3832,8 +3844,8 @@ SLJIT_API_FUNC_ATTRIBUTE void sljit_set_const(sljit_uw addr, sljit_s32 op, sljit
 		SLJIT_ASSERT(((SWAP_INSTRUCTION(inst[0]) & 0xffe00000) == MOVZ || (SWAP_INSTRUCTION(inst[0]) & 0xffe00000) == MOVN) && (SWAP_INSTRUCTION(inst[1]) & 0xffe00000) == (MOVK | (1 << 21)));
 
 		SLJIT_UPDATE_WX_FLAGS(inst, inst + 2, 0);
-		inst[0] = SWAP_INSTRUCTION(SLJIT_EMIT_CONST_S32(new_constant) | (SWAP_INSTRUCTION(inst[0]) & 0x1f));
-		inst[1] = SWAP_INSTRUCTION(MOVK | (1 << 21) | (sljit_ins)((new_constant >> 11) & 0x1fffe0) | (SWAP_INSTRUCTION(inst[1]) & 0x1f));
+		inst[0] = SWAP_INSTRUCTION(SLJIT_EMIT_CONST_S32(new_constant)) | (inst[0] & SWAP_INSTRUCTION(0x1f));
+		inst[1] = SWAP_INSTRUCTION(MOVK | (1 << 21) | (sljit_ins)((new_constant >> 11) & 0x1fffe0)) | (inst[1] & SWAP_INSTRUCTION(0x1f));
 		SLJIT_UPDATE_WX_FLAGS(inst, inst + 2, 1);
 		inst = (sljit_ins *)SLJIT_ADD_EXEC_OFFSET(inst, executable_offset);
 		SLJIT_CACHE_FLUSH(inst, inst + 2);
